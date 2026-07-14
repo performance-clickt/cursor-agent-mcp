@@ -13,6 +13,8 @@ import {
   buildArgv,
   resolveTimeout,
   resolveEffectiveTimeout,
+  resolveMaxOutputBytes,
+  DEFAULT_MAX_OUTPUT_BYTES,
   normalizeArgs,
   isModelAllowed,
 } from '../lib/argv.js';
@@ -218,6 +220,46 @@ test('resolveEffectiveTimeout ignores invalid per-call values and falls through'
 test('resolveEffectiveTimeout honors a custom default when falling through', () => {
   assert.equal(resolveEffectiveTimeout(undefined, undefined, 9999), 9999);
   assert.equal(resolveEffectiveTimeout(undefined, 'nope', 9999), 9999);
+});
+
+// --- resolveMaxOutputBytes: per-call > env > default -----------------------
+
+test('resolveMaxOutputBytes falls back to the default when no per-call and no/empty env', () => {
+  assert.equal(resolveMaxOutputBytes(undefined, undefined), DEFAULT_MAX_OUTPUT_BYTES);
+  assert.equal(resolveMaxOutputBytes(undefined, ''), DEFAULT_MAX_OUTPUT_BYTES);
+  assert.equal(DEFAULT_MAX_OUTPUT_BYTES, 1000000);
+});
+
+test('resolveMaxOutputBytes per-call value wins over env and default', () => {
+  // per-call beats env...
+  assert.equal(resolveMaxOutputBytes(2048, '999999'), 2048);
+  // ...and beats the default when env is unset.
+  assert.equal(resolveMaxOutputBytes(2048, undefined), 2048);
+});
+
+test('resolveMaxOutputBytes env wins over default when no per-call value', () => {
+  assert.equal(resolveMaxOutputBytes(undefined, '4096'), 4096);
+});
+
+test('resolveMaxOutputBytes ignores invalid per-call values and falls through', () => {
+  // NaN / non-positive / non-number per-call must not win; env/default takes over.
+  assert.equal(resolveMaxOutputBytes(Number.NaN, '4096'), 4096);
+  assert.equal(resolveMaxOutputBytes(0, '4096'), 4096);
+  assert.equal(resolveMaxOutputBytes(-1, '4096'), 4096);
+  assert.equal(resolveMaxOutputBytes('2048', '4096'), 4096); // string is not a number override
+  assert.equal(resolveMaxOutputBytes(Number.NaN, undefined), DEFAULT_MAX_OUTPUT_BYTES);
+});
+
+test('resolveMaxOutputBytes falls back to default on invalid/NaN/non-positive env', () => {
+  assert.equal(resolveMaxOutputBytes(undefined, 'abc'), DEFAULT_MAX_OUTPUT_BYTES);
+  assert.equal(resolveMaxOutputBytes(undefined, '0'), DEFAULT_MAX_OUTPUT_BYTES);
+  assert.equal(resolveMaxOutputBytes(undefined, '-5'), DEFAULT_MAX_OUTPUT_BYTES);
+});
+
+test('resolveMaxOutputBytes honors a custom default when falling through', () => {
+  assert.equal(resolveMaxOutputBytes(undefined, undefined, 512), 512);
+  assert.equal(resolveMaxOutputBytes(undefined, 'nope', 512), 512);
+  assert.equal(resolveMaxOutputBytes(0, '0', 512), 512);
 });
 
 // --- normalizeArgs ---------------------------------------------------------
