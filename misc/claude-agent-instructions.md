@@ -4,7 +4,7 @@ Audience: Claude (and advanced users configuring Claude Code)
 
 Goal: Minimize Claude’s token usage and cost by delegating repo-aware work to the cursor-agent CLI via this MCP server, while keeping Claude’s own context small and interactions deterministic.
 
-Reference implementation: [mcp-cursor-agent/server.js](mcp-cursor-agent/server.js) • [mcp-cursor-agent/README.md](mcp-cursor-agent/README.md) • [mcp-cursor-agent/test_client.mjs](mcp-cursor-agent/test_client.mjs)
+Reference implementation: [mcp-cursor-agent/server.js](../server.js) • [mcp-cursor-agent/README.md](../README.md) • [mcp-cursor-agent/test_client.mjs](../test_client.mjs)
 
 
 ## Why
@@ -19,10 +19,10 @@ Reference implementation: [mcp-cursor-agent/server.js](mcp-cursor-agent/server.j
 
 ## Where this is implemented
 
-- Tool registrations begin at [JavaScript.server.tool()](mcp-cursor-agent/server.js:273).
-- Common executor that runs the CLI lives in [JavaScript.invokeCursorAgent()](mcp-cursor-agent/server.js:38).
-- Legacy runner for single-shot chat is [JavaScript.runCursorAgent()](mcp-cursor-agent/server.js:153).
-- Full user documentation is in [mcp-cursor-agent/README.md](mcp-cursor-agent/README.md).
+- Tool registrations begin at [JavaScript.server.tool()](../server.js:361).
+- Common executor that runs the CLI lives in [JavaScript.invokeCursorAgent()](../server.js:51).
+- Legacy runner for single-shot chat is [JavaScript.runCursorAgent()](../server.js:229).
+- Full user documentation is in [mcp-cursor-agent/README.md](../README.md).
 
 
 ## When to use cursor-agent (instead of having Claude read files directly)
@@ -188,7 +188,7 @@ In case of failure:
 
 ## Environment Defaults for Claude Code
 
-Host config example is in [mcp-cursor-agent/README.md](mcp-cursor-agent/README.md), but for the agent:
+Host config example is in [mcp-cursor-agent/README.md](../README.md), but for the agent:
 
 - Prefer these env defaults for stability/cost:
   - CURSOR_AGENT_IDLE_EXIT_MS="0"
@@ -231,8 +231,8 @@ Constraints:
 
 ## References (clickable)
 
-- Tool definitions start at [JavaScript.server.tool()](mcp-cursor-agent/server.js:273)
-- Executor: [JavaScript.invokeCursorAgent()](mcp-cursor-agent/server.js:38)
-- Legacy runner: [JavaScript.runCursorAgent()](mcp-cursor-agent/server.js:153)
-- Full README: [mcp-cursor-agent/README.md](mcp-cursor-agent/README.md)
-- Smoke client: [mcp-cursor-agent/test_client.mjs](mcp-cursor-agent/test_client.mjs)
+- Tool definitions start at [JavaScript.server.tool()](../server.js:361)
+- Executor: [JavaScript.invokeCursorAgent()](../server.js:51)
+- Legacy runner: [JavaScript.runCursorAgent()](../server.js:229)
+- Full README: [mcp-cursor-agent/README.md](../README.md)
+- Smoke client: [mcp-cursor-agent/test_client.mjs](../test_client.mjs)
