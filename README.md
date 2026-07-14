@@ -45,8 +45,9 @@ This MCP exists to offload heavy “thinking” and repo‑aware tasks from the 
 ## Requirements
 
 - Node.js 18+ (tested up to Node 22)
-- A working `cursor-agent` CLI in your PATH or at an explicit location
-- Provider credentials configured for your chosen model (e.g., via the CLI’s own mechanism)
+- A working `cursor-agent` CLI in your PATH or at an explicit location (`CURSOR_AGENT_PATH`). Install it with `curl https://cursor.com/install -fsS | bash` and sign in (`cursor-agent status` should show your account).
+- A Cursor plan that permits **named models**: on a Free plan `cursor-agent` only runs `auto` (`--model glm-5.2-high` returns "Named models unavailable"), so a paid plan is required to route to GLM 5.2. Valid model ids come from `cursor-agent --list-models` — GLM 5.2 is `glm-5.2-high` / `glm-5.2-max` (there is no bare `glm-5.2`).
+- On each call the server **preflights** the resolved model against `cursor-agent --list-models` (cached per process) and fails loudly if it isn't in the catalog; set `CURSOR_AGENT_SKIP_PREFLIGHT=1` to skip. It also injects `--trust` for headless runs (see Security notes).
 
 
 ## Installation
@@ -307,6 +308,7 @@ Environment variables understood by the server:
 - CURSOR_AGENT_ECHO_PROMPT: "1" to prepend the effective prompt to the tool’s result
 - CURSOR_AGENT_RUN_METADATA: "1"/"true"/"yes"/"on" to append a one‑line `[run: model=… duration=…ms exit=… bytes=… truncated=…]` block to every tool result, so the resolved model and cost are visible in the result itself (host stderr is often hidden). Off by default; a per‑call `include_run_metadata` boolean overrides it. When off, results are byte‑for‑byte unchanged.
 - DEBUG_CURSOR_MCP: "1" to log spawn/exit diagnostics to stderr
+- CURSOR_AGENT_SKIP_PREFLIGHT: "1" to skip the reachability preflight (HM-557). By default, when a model is resolved the server validates it against `cursor-agent --list-models` (cached per process) and rejects an unreachable model before spawning; set this to run without the check (e.g. offline, or to save the one-time `--list-models` call).
 - CURSOR_AGENT_MODEL_ALLOWLIST: opt-in, comma-separated list of models the server is allowed to run (e.g. `glm-5.2-high,gpt-5`); entries are trimmed, empty entries are dropped. Unset or empty = allow all models (backward-compatible; the allowlist stays opt-in by choice rather than hardcoding a default — valid ids come from `cursor-agent --list-models`). When set, a resolved model (per-call `model` or the `CURSOR_AGENT_MODEL` fallback) not in the list is rejected before spawning, with an error naming the offending model. Recommended to include `glm-5.2-high` if you route to it.
 
 

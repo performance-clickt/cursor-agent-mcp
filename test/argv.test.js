@@ -19,6 +19,7 @@ import {
   normalizeChatArgs,
   isModelAllowed,
   formatRunMetadata,
+  parseModelList,
 } from '../lib/argv.js';
 
 // --- buildArgv: --print / --output-format injection + passthrough ----------
@@ -423,4 +424,21 @@ test('formatRunMetadata renders a null/undefined exitCode as "n/a" (but keeps ex
     formatRunMetadata({ model: 'm', durationMs: 10, exitCode: 0, bytes: 3, truncated: false }),
     '[run: model=m duration=10ms exit=0 bytes=3 truncated=false]',
   );
+});
+
+// --- parseModelList (HM-557) ------------------------------------------------
+
+test('parseModelList extracts ids from `id - Label` lines, skipping the header', () => {
+  const out = 'Available models\n\nauto - Auto (default)\nglm-5.2-high - GLM 5.2\nglm-5.2-max - GLM 5.2 Max\n';
+  assert.deepEqual(parseModelList(out), ['auto', 'glm-5.2-high', 'glm-5.2-max']);
+});
+
+test('parseModelList keeps dotted/dashed ids and drops blank/garbage lines', () => {
+  const out = 'gpt-5.3-codex-low - Codex 5.3 Low\n\n   \nclaude-opus-4-8-thinking-high - Opus\n';
+  assert.deepEqual(parseModelList(out), ['gpt-5.3-codex-low', 'claude-opus-4-8-thinking-high']);
+});
+
+test('parseModelList returns [] for empty/undefined input', () => {
+  assert.deepEqual(parseModelList(''), []);
+  assert.deepEqual(parseModelList(undefined), []);
 });
