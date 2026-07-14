@@ -46,6 +46,23 @@ Tool Selection – Decision Flow
 - Need special CLI invocation → cursor_agent_raw (confirm with user; default print=false)
 - Legacy/compat → cursor_agent_run (prefer chat in new flows)
 
+Model Routing – When to Hand Off to GLM 5.2
+Delegate to GLM 5.2 (the cursor-agent default model) for:
+- Bulk or first-pass code search across many files
+- Wide repository summaries and architecture overviews
+- Boilerplate edits and mechanical refactors
+- Draft plans/checklists meant to be reviewed before acting
+
+Keep in Claude (don't delegate) for:
+- Nuanced or safety-critical reasoning
+- Final review before an edit is applied or a plan is executed
+- Ambiguous or underspecified requirements — resolve the ambiguity first
+- Anything where a wrong answer is expensive (security, data loss, prod config)
+
+Verification & Escalation Loop
+- Treat GLM 5.2 output as a draft, not a decision. When a result is load-bearing (it feeds an edit, a plan, or a judgment call), read and verify it before acting on it.
+- If confidence is low — the output looks incomplete, contradicts what you expected, or touches safety-critical code — escalate: re-run with a stronger model (override `model` per call) or do the reasoning directly in Claude, rather than passing the delegate's output straight through.
+
 Argument Patterns (examples)
 
 A) Analyze a subset of the repo (scoped)
