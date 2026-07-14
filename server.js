@@ -197,6 +197,7 @@ const server = new McpServer(
        '- cursor_agent_plan_task: prompt-based planning given a goal and optional constraints.',
        '- cursor_agent_raw: pass raw argv directly to cursor-agent; set print=false to avoid implicit --print.',
        '- cursor_agent_run: legacy single-shot chat (prompt as positional).',
+       'For when to hand off to GLM 5.2 vs. keep in Claude, and the verify/escalate loop, see the routing policy in misc/claude-project-instructions.md and misc/claude-agent-instructions.md.',
      ].join(' '),
  },
 );

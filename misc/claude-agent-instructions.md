@@ -40,6 +40,22 @@ Avoid or minimize using cursor-agent when:
 - A quick direct answer is faster than spawning a CLI process (e.g., trivial Q&A with no code context).
 
 
+## Model Routing Policy: When to Hand Off to GLM 5.2
+
+| Delegate to GLM 5.2 | Keep in Claude |
+|---|---|
+| Bulk / first-pass code search | Nuanced or safety-critical reasoning |
+| Wide repo summaries | Final review before an edit is applied or a plan is executed |
+| Boilerplate edits | Ambiguous or underspecified requirements |
+| Draft plans / checklists | Anything where a wrong answer is expensive |
+| Mechanical refactors | |
+
+### Verification & Escalation Loop
+
+- GLM 5.2 output is a draft, not a decision. When a result is load-bearing — it feeds an edit, a plan, or a judgment call — Claude verifies it before acting on it.
+- On low confidence (incomplete, contradicts expectations, or touches safety-critical code), escalate: re-run with a stronger model via the `model` field, or reason it through directly in Claude, instead of passing the delegate's output straight through.
+
+
 ## Tool Overview and Decision Guide
 
 All tools accept COMMON fields: output_format ("text"|"markdown"|"json", default "text"), extra_args?: string[], cwd?: string, executable?: string, model?: string, force?: boolean, echo_prompt?: boolean.
