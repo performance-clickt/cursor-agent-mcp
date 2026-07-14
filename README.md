@@ -24,6 +24,7 @@ This MCP exists to offload heavy “thinking” and repo‑aware tasks from the 
   - Use `"text"` or `"markdown"` for concise answers. Reserve `"json"` only when you truly need structured output (it’s usually larger).
 - Select a model that matches the task:
   - Set `CURSOR_AGENT_MODEL` to a cost‑effective default; override per tool call only when necessary.
+  - The recommended default is `glm-5.2`; other allowlisted models remain selectable per tool call (see the routing policy in HM-560, allowlist in HM-567).
 - Avoid unnecessary echo/debug:
   - `CURSOR_AGENT_ECHO_PROMPT=1` is helpful during setup, but disables it later to save tokens in host logs.
   - Keep `DEBUG_CURSOR_MCP` off in normal use; it writes diagnostics to stderr (not counted in host tokens, but noisy).
@@ -233,7 +234,7 @@ Examples:
 ```
 
 ```json
-{ "name": "cursor_agent_raw", "arguments": { "argv": ["-m","gpt-5","What is SIMD?"], "print": true } }
+{ "name": "cursor_agent_raw", "arguments": { "argv": ["-m","glm-5.2","What is SIMD?"], "print": true } }
 ```
 
 
@@ -258,7 +259,7 @@ Example Claude Code/Claude Desktop entry:
         "CURSOR_AGENT_ECHO_PROMPT": "1",
         "CURSOR_AGENT_FORCE": "true",
         "CURSOR_AGENT_PATH": "/home/you/.local/bin/cursor-agent",
-        "CURSOR_AGENT_MODEL": "gpt-5",
+        "CURSOR_AGENT_MODEL": "glm-5.2",
         "CURSOR_AGENT_IDLE_EXIT_MS": "0",
         "CURSOR_AGENT_TIMEOUT_MS": "60000"
       }
@@ -280,7 +281,7 @@ Add `DEBUG_CURSOR_MCP=1` to print diagnostics to stderr (spawn argv, prompt prev
         "CURSOR_AGENT_ECHO_PROMPT": "1",
         "CURSOR_AGENT_FORCE": "true",
         "CURSOR_AGENT_PATH": "/home/you/.local/bin/cursor-agent",
-        "CURSOR_AGENT_MODEL": "gpt-5",
+        "CURSOR_AGENT_MODEL": "glm-5.2",
         "CURSOR_AGENT_IDLE_EXIT_MS": "0",
         "CURSOR_AGENT_TIMEOUT_MS": "60000",
         "DEBUG_CURSOR_MCP": "1"
@@ -303,6 +304,11 @@ Environment variables understood by the server:
 - CURSOR_AGENT_IDLE_EXIT_MS: idle‑kill threshold in ms; "0" disables idle kill (recommended)
 - CURSOR_AGENT_ECHO_PROMPT: "1" to prepend the effective prompt to the tool’s result
 - DEBUG_CURSOR_MCP: "1" to log spawn/exit diagnostics to stderr
+
+
+## Handoff decisions
+
+Delegating a task to `cursor-agent` — when to hand off and how the response is verified before being trusted — is governed by a routing/verification policy, not left to per-call judgment. That policy is defined in Linear issue HM-560; see that issue for the authoritative rules rather than inferring them from this README. (The model allowlist itself is tracked separately in HM-567.)
 
 
 ## Usage inside Claude

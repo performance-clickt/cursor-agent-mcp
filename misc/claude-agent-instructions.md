@@ -177,7 +177,7 @@ Host config example is in [mcp-cursor-agent/README.md](mcp-cursor-agent/README.m
 - Prefer these env defaults for stability/cost:
   - CURSOR_AGENT_IDLE_EXIT_MS="0"
   - CURSOR_AGENT_TIMEOUT_MS="60000"
-  - CURSOR_AGENT_MODEL set to a cost-effective default
+  - CURSOR_AGENT_MODEL set to a cost-effective default (recommended default: `glm-5.2`; other allowlisted models remain selectable per HM-567)
   - CURSOR_AGENT_ECHO_PROMPT="0" normally (set to "1" only when debugging)
 - Optional diagnostics:
   - DEBUG_CURSOR_MCP="1" for local development (stderr logs, may not appear in Claude UI)
