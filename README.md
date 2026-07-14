@@ -24,7 +24,7 @@ This MCP exists to offload heavy “thinking” and repo‑aware tasks from the 
   - Use `"text"` or `"markdown"` for concise answers. Reserve `"json"` only when you truly need structured output (it’s usually larger).
 - Select a model that matches the task:
   - Set `CURSOR_AGENT_MODEL` to a cost‑effective default; override per tool call only when necessary.
-  - The recommended default is `glm-5.2`; other allowlisted models remain selectable per tool call (see the routing policy in HM-560, allowlist in HM-567).
+  - The recommended default is `glm-5.2-high` (GLM 5.2; `glm-5.2-max` is the higher‑effort variant); other allowlisted models remain selectable per tool call (see the routing policy in HM-560, allowlist in HM-567). Valid model ids come from `cursor-agent --list-models`, and named models require a paid Cursor plan.
 - Avoid unnecessary echo/debug:
   - `CURSOR_AGENT_ECHO_PROMPT=1` is helpful during setup, but disables it later to save tokens in host logs.
   - Keep `DEBUG_CURSOR_MCP` off in normal use; it writes diagnostics to stderr (not counted in host tokens, but noisy).
@@ -236,7 +236,7 @@ Examples:
 ```
 
 ```json
-{ "name": "cursor_agent_raw", "arguments": { "argv": ["-m","glm-5.2","What is SIMD?"], "print": true } }
+{ "name": "cursor_agent_raw", "arguments": { "argv": ["--model","glm-5.2-high","What is SIMD?"], "print": true } }
 ```
 
 
@@ -261,7 +261,7 @@ Example Claude Code/Claude Desktop entry:
         "CURSOR_AGENT_ECHO_PROMPT": "1",
         "CURSOR_AGENT_FORCE": "true",
         "CURSOR_AGENT_PATH": "/home/you/.local/bin/cursor-agent",
-        "CURSOR_AGENT_MODEL": "glm-5.2",
+        "CURSOR_AGENT_MODEL": "glm-5.2-high",
         "CURSOR_AGENT_IDLE_EXIT_MS": "0",
         "CURSOR_AGENT_TIMEOUT_MS": "60000"
       }
@@ -283,7 +283,7 @@ Add `DEBUG_CURSOR_MCP=1` to print diagnostics to stderr (spawn argv, prompt prev
         "CURSOR_AGENT_ECHO_PROMPT": "1",
         "CURSOR_AGENT_FORCE": "true",
         "CURSOR_AGENT_PATH": "/home/you/.local/bin/cursor-agent",
-        "CURSOR_AGENT_MODEL": "glm-5.2",
+        "CURSOR_AGENT_MODEL": "glm-5.2-high",
         "CURSOR_AGENT_IDLE_EXIT_MS": "0",
         "CURSOR_AGENT_TIMEOUT_MS": "60000",
         "DEBUG_CURSOR_MCP": "1"
@@ -307,7 +307,7 @@ Environment variables understood by the server:
 - CURSOR_AGENT_ECHO_PROMPT: "1" to prepend the effective prompt to the tool’s result
 - CURSOR_AGENT_RUN_METADATA: "1"/"true"/"yes"/"on" to append a one‑line `[run: model=… duration=…ms exit=… bytes=… truncated=…]` block to every tool result, so the resolved model and cost are visible in the result itself (host stderr is often hidden). Off by default; a per‑call `include_run_metadata` boolean overrides it. When off, results are byte‑for‑byte unchanged.
 - DEBUG_CURSOR_MCP: "1" to log spawn/exit diagnostics to stderr
-- CURSOR_AGENT_MODEL_ALLOWLIST: opt-in, comma-separated list of models the server is allowed to run (e.g. `glm-5.2,gpt-5`); entries are trimmed, empty entries are dropped. Unset or empty = allow all models (backward-compatible; we don't yet hardcode a rejecting default since HM-557's full model list is still blocked). When set, a resolved model (per-call `model` or the `CURSOR_AGENT_MODEL` fallback) not in the list is rejected before spawning, with an error naming the offending model. Recommended to include `glm-5.2` if you route to it.
+- CURSOR_AGENT_MODEL_ALLOWLIST: opt-in, comma-separated list of models the server is allowed to run (e.g. `glm-5.2-high,gpt-5`); entries are trimmed, empty entries are dropped. Unset or empty = allow all models (backward-compatible; the allowlist stays opt-in by choice rather than hardcoding a default — valid ids come from `cursor-agent --list-models`). When set, a resolved model (per-call `model` or the `CURSOR_AGENT_MODEL` fallback) not in the list is rejected before spawning, with an error naming the offending model. Recommended to include `glm-5.2-high` if you route to it.
 
 
 ## Handoff decisions
