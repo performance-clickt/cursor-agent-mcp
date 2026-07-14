@@ -4,9 +4,8 @@
 // cursor-agent binary, no network, no credentials, and no installed npm deps.
 // Run with: node --test test/
 //
-// NOTE: assertions capture TODAY'S behavior. In particular, argv ordering emits
-// the -f/-m flags AFTER the positional prompt. HM-558 will change that ordering
-// and these expectations will need to move with it.
+// NOTE: argv ordering emits the -f/-m flags BEFORE the positional prompt (HM-558)
+// so a trailing prompt cannot cause a parser to drop the model/force override.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -51,32 +50,31 @@ test('buildArgv handles missing argv (undefined) as empty', () => {
 
 // --- buildArgv: model injection -------------------------------------------
 
-test('buildArgv appends -m <model> from per-call arg (after the prompt)', () => {
-  // HM-558 will change this ordering.
+test('buildArgv inserts -m <model> from per-call arg (before the prompt)', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], model: 'gpt-5' }, {}),
-    ['--print', '--output-format', 'text', 'p', '-m', 'gpt-5'],
+    ['--print', '--output-format', 'text', '-m', 'gpt-5', 'p'],
   );
 });
 
-test('buildArgv appends -m <model> from CURSOR_AGENT_MODEL env', () => {
+test('buildArgv inserts -m <model> from CURSOR_AGENT_MODEL env', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'] }, { CURSOR_AGENT_MODEL: 'glm-5.2' }),
-    ['--print', '--output-format', 'text', 'p', '-m', 'glm-5.2'],
+    ['--print', '--output-format', 'text', '-m', 'glm-5.2', 'p'],
   );
 });
 
 test('buildArgv per-call model takes precedence over env model', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], model: 'call-model' }, { CURSOR_AGENT_MODEL: 'env-model' }),
-    ['--print', '--output-format', 'text', 'p', '-m', 'call-model'],
+    ['--print', '--output-format', 'text', '-m', 'call-model', 'p'],
   );
 });
 
 test('buildArgv trims the per-call model', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], model: '  spaced  ' }, {}),
-    ['--print', '--output-format', 'text', 'p', '-m', 'spaced'],
+    ['--print', '--output-format', 'text', '-m', 'spaced', 'p'],
   );
 });
 
@@ -103,19 +101,18 @@ test('buildArgv does not inject -m when no model is effective', () => {
 
 // --- buildArgv: force injection -------------------------------------------
 
-test('buildArgv appends -f from per-call force=true (after the prompt)', () => {
-  // HM-558 will change this ordering.
+test('buildArgv inserts -f from per-call force=true (before the prompt)', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], force: true }, {}),
-    ['--print', '--output-format', 'text', 'p', '-f'],
+    ['--print', '--output-format', 'text', '-f', 'p'],
   );
 });
 
-test('buildArgv appends -f from CURSOR_AGENT_FORCE env truthy variants', () => {
+test('buildArgv inserts -f from CURSOR_AGENT_FORCE env truthy variants', () => {
   for (const v of ['1', 'true', 'yes', 'on', 'TRUE', 'On']) {
     assert.deepEqual(
       buildArgv({ argv: ['p'] }, { CURSOR_AGENT_FORCE: v }),
-      ['--print', '--output-format', 'text', 'p', '-f'],
+      ['--print', '--output-format', 'text', '-f', 'p'],
       `expected -f for CURSOR_AGENT_FORCE=${v}`,
     );
   }
@@ -151,11 +148,10 @@ test('buildArgv does not duplicate -f when --force already present', () => {
 
 // --- buildArgv: force + model ordering together ---------------------------
 
-test('buildArgv emits -f before -m, both after the prompt', () => {
-  // HM-558 will change this ordering.
+test('buildArgv emits -f before -m, both before the prompt', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], force: true, model: 'm1' }, {}),
-    ['--print', '--output-format', 'text', 'p', '-f', '-m', 'm1'],
+    ['--print', '--output-format', 'text', '-f', '-m', 'm1', 'p'],
   );
 });
 
