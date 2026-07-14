@@ -7,7 +7,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { spawn } from 'node:child_process';
 import process from 'node:process';
-import { buildArgv, resolveEffectiveTimeout, normalizeArgs } from './lib/argv.js';
+import { buildArgv, resolveEffectiveTimeout, normalizeArgs, isModelAllowed } from './lib/argv.js';
 
 // Grace period (ms) between the SIGTERM sent on timeout and the follow-up
 // SIGKILL. Gives the child a moment to flush partial output before it is
@@ -45,6 +45,19 @@ function resolveExecutable(explicit) {
 */
 async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable, model, force, print = true, timeout_ms }) {
  const cmd = resolveExecutable(executable);
+
+ // HM-567: opt-in model allowlist. Mirrors buildArgv's own model resolution
+ // (per-call `model` wins, falling back to CURSOR_AGENT_MODEL) so the check
+ // reflects whatever model would actually be passed to cursor-agent. Only
+ // enforced when CURSOR_AGENT_MODEL_ALLOWLIST is set; unset/empty allows all
+ // models (see isModelAllowed in lib/argv.js for the full rationale).
+ const resolvedModel = (model && model.trim && model.trim()) || (process.env.CURSOR_AGENT_MODEL || '').trim();
+ if (resolvedModel && !isModelAllowed(resolvedModel, process.env)) {
+   return {
+     content: [{ type: 'text', text: `Model "${resolvedModel}" is not in the allowlist (CURSOR_AGENT_MODEL_ALLOWLIST).` }],
+     isError: true,
+   };
+ }
 
  // Compute the final argv (model/force from args/env, --print injection).
  // HM-558 will change the flag ordering; buildArgv preserves today's behavior.

@@ -9,7 +9,13 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArgv, resolveTimeout, resolveEffectiveTimeout, normalizeArgs } from '../lib/argv.js';
+import {
+  buildArgv,
+  resolveTimeout,
+  resolveEffectiveTimeout,
+  normalizeArgs,
+  isModelAllowed,
+} from '../lib/argv.js';
 
 // --- buildArgv: --print / --output-format injection + passthrough ----------
 
@@ -236,4 +242,55 @@ test('normalizeArgs passes through non-objects untouched', () => {
   assert.equal(normalizeArgs('str'), 'str');
   assert.equal(normalizeArgs(null), null);
   assert.equal(normalizeArgs(undefined), undefined);
+});
+
+// --- isModelAllowed (HM-567) -----------------------------------------------
+// Opt-in allowlist: enforced ONLY when CURSOR_AGENT_MODEL_ALLOWLIST is set.
+
+test('isModelAllowed allows any model when the allowlist env is unset', () => {
+  assert.equal(isModelAllowed('glm-5.2', {}), true);
+  assert.equal(isModelAllowed('gpt-5', {}), true);
+  assert.equal(isModelAllowed('anything-goes', {}), true);
+});
+
+test('isModelAllowed allows any model when the allowlist env is empty', () => {
+  assert.equal(isModelAllowed('glm-5.2', { CURSOR_AGENT_MODEL_ALLOWLIST: '' }), true);
+  assert.equal(isModelAllowed('glm-5.2', { CURSOR_AGENT_MODEL_ALLOWLIST: '   ' }), true);
+});
+
+test('isModelAllowed allows a model present in the configured allowlist', () => {
+  const env = { CURSOR_AGENT_MODEL_ALLOWLIST: 'glm-5.2,gpt-5' };
+  assert.equal(isModelAllowed('glm-5.2', env), true);
+  assert.equal(isModelAllowed('gpt-5', env), true);
+});
+
+test('isModelAllowed rejects a model not present in the configured allowlist', () => {
+  const env = { CURSOR_AGENT_MODEL_ALLOWLIST: 'glm-5.2' };
+  assert.equal(isModelAllowed('gtp-5', env), false); // typo, must not match gpt-5
+  assert.equal(isModelAllowed('gpt-5', env), false);
+});
+
+test('isModelAllowed tolerates whitespace around allowlist entries and the model', () => {
+  const env = { CURSOR_AGENT_MODEL_ALLOWLIST: '  glm-5.2 ,  gpt-5  ' };
+  assert.equal(isModelAllowed('glm-5.2', env), true);
+  assert.equal(isModelAllowed('  gpt-5  ', env), true);
+  assert.equal(isModelAllowed('gpt-4', env), false);
+});
+
+test('isModelAllowed drops empty entries from a trailing/double comma', () => {
+  const env = { CURSOR_AGENT_MODEL_ALLOWLIST: 'glm-5.2,,gpt-5,' };
+  assert.equal(isModelAllowed('glm-5.2', env), true);
+  assert.equal(isModelAllowed('gpt-5', env), true);
+  assert.equal(isModelAllowed('', env), false);
+});
+
+test('isModelAllowed defaults env to process.env when omitted', () => {
+  const prev = process.env.CURSOR_AGENT_MODEL_ALLOWLIST;
+  delete process.env.CURSOR_AGENT_MODEL_ALLOWLIST;
+  try {
+    assert.equal(isModelAllowed('anything'), true);
+  } finally {
+    if (prev === undefined) delete process.env.CURSOR_AGENT_MODEL_ALLOWLIST;
+    else process.env.CURSOR_AGENT_MODEL_ALLOWLIST = prev;
+  }
 });
