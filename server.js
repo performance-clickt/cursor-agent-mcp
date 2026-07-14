@@ -71,6 +71,7 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
    let err = '';
    let idleTimer = null;
    let killTimer = null;
+   let mainTimer = null;
    let killedByIdle = false;
    let timedOut = false;
    let truncated = false;
@@ -126,6 +127,7 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
 
    child.stderr.on('data', (d) => {
      err += d.toString();
+     scheduleIdleKill();
    });
 
    child.on('error', (e) => {
@@ -145,7 +147,7 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
    // Precedence: per-call timeout_ms > CURSOR_AGENT_TIMEOUT_MS env > default.
    // resolveEffectiveTimeout always returns a finite number (default 120000).
    const timeoutMs = resolveEffectiveTimeout(timeout_ms, process.env.CURSOR_AGENT_TIMEOUT_MS);
-   const mainTimer = setTimeout(() => {
+   mainTimer = setTimeout(() => {
      // Graceful kill: SIGTERM first so the child can flush partial output,
      // then SIGKILL after a short grace if it hasn't exited on its own. We do
      // NOT settle here — the 'close' handler settles once the child exits (via
