@@ -7,7 +7,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { spawn } from 'node:child_process';
 import process from 'node:process';
-import { buildArgv, resolveEffectiveTimeout, resolveMaxOutputBytes, normalizeArgs, isModelAllowed } from './lib/argv.js';
+import { buildArgv, resolveEffectiveTimeout, resolveMaxOutputBytes, normalizeArgs, normalizeChatArgs, isModelAllowed } from './lib/argv.js';
 
 // Grace period (ms) between the SIGTERM sent on timeout and the follow-up
 // SIGKILL. Gives the child a moment to flush partial output before it is
@@ -329,14 +329,7 @@ server.tool(
   async (args) => {
     try {
       // Normalize prompt in case the host nests under "arguments"
-      const prompt =
-        (args && typeof args === 'object' && 'prompt' in args ? args.prompt : undefined) ??
-        (args && typeof args === 'object' && args.arguments && typeof args.arguments === 'object' ? args.arguments.prompt : undefined);
-
-      const flat = {
-        ...(args && typeof args === 'object' && args.arguments && typeof args.arguments === 'object' ? args.arguments : args),
-        prompt,
-      };
+      const flat = normalizeChatArgs(args);
 
       return await runCursorAgent(flat);
     } catch (e) {

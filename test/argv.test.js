@@ -16,6 +16,7 @@ import {
   resolveMaxOutputBytes,
   DEFAULT_MAX_OUTPUT_BYTES,
   normalizeArgs,
+  normalizeChatArgs,
   isModelAllowed,
 } from '../lib/argv.js';
 
@@ -284,6 +285,43 @@ test('normalizeArgs passes through non-objects untouched', () => {
   assert.equal(normalizeArgs('str'), 'str');
   assert.equal(normalizeArgs(null), null);
   assert.equal(normalizeArgs(undefined), undefined);
+});
+
+// --- normalizeChatArgs (HM-577) --------------------------------------------
+// Reproduces the inline normalization previously in the cursor_agent_chat
+// handler in server.js, including its quirks (see lib/argv.js for the trace).
+
+test('normalizeChatArgs: flat input is returned with the same fields', () => {
+  assert.deepEqual(
+    normalizeChatArgs({ prompt: 'hi', model: 'x' }),
+    { prompt: 'hi', model: 'x' },
+  );
+});
+
+test('normalizeChatArgs: nested-only input is unwrapped with its prompt', () => {
+  assert.deepEqual(
+    normalizeChatArgs({ arguments: { prompt: 'hi', model: 'x' } }),
+    { prompt: 'hi', model: 'x' },
+  );
+});
+
+test('normalizeChatArgs: both top-level prompt and nested arguments present pins the exact current behavior', () => {
+  // Hand-traced from the original inline code:
+  //  - `prompt` resolves to the top-level 'top' ('prompt' in args is true, so
+  //    the nested arguments.prompt is never consulted).
+  //  - the spread source is `args.arguments` (an object), NOT `args` — so the
+  //    top-level 'top' is NOT what ends up in the spread; only `model: 'x'`
+  //    survives from arguments, and the resolved prompt ('top') is set last.
+  assert.deepEqual(
+    normalizeChatArgs({ prompt: 'top', arguments: { prompt: 'nested', model: 'x' } }),
+    { prompt: 'top', model: 'x' },
+  );
+});
+
+test('normalizeChatArgs: non-object/undefined input does not throw', () => {
+  assert.deepEqual(normalizeChatArgs(undefined), { prompt: undefined });
+  assert.deepEqual(normalizeChatArgs(null), { prompt: undefined });
+  assert.deepEqual(normalizeChatArgs('str'), { 0: 's', 1: 't', 2: 'r', prompt: undefined });
 });
 
 // --- isModelAllowed (HM-567) -----------------------------------------------
