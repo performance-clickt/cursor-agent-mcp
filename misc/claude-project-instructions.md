@@ -9,7 +9,7 @@ Intent
 
 Background
 - The project includes a custom MCP server that wraps the `cursor-agent` CLI and exposes focused tools: chat, edit_file, analyze_files, search_repo, plan_task, raw, run.
-- Server entry: [mcp-cursor-agent/server.js](mcp-cursor-agent/server.js)
+- Server entry: [mcp-cursor-agent/server.js](../server.js)
 
 Core Policy (always follow)
 1) Prefer MCP tools over inline reading when the task can be scoped (paths/globs/top-N):

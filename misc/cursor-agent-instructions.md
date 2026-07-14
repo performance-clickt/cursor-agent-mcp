@@ -89,14 +89,14 @@ Options (may use more than one):
    - Best for transparent, host‑controlled governance.
 
 2) Host instructions (Claude Code “Project Instructions”)
-   - The host instructs itself to prefer MCP tools and to pass compact prompts and limits. See: [misc/claude-project-instructions.md](misc/claude-project-instructions.md)
+   - The host instructs itself to prefer MCP tools and to pass compact prompts and limits. See: [misc/claude-project-instructions.md](claude-project-instructions.md)
 
 3) MCP server “instructions” field (lightweight hint)
-   - The server includes a short string for discovery, not a full policy. For robust behavior, prefer (1) and (2). If desired later, expand server hints in code at [JavaScript.new McpServer(...)](mcp-cursor-agent/server.js:197).
+   - The server includes a short string for discovery, not a full policy. For robust behavior, prefer (1) and (2). If desired later, expand server hints in code at [JavaScript.new McpServer(...)](../server.js:277).
 
 Recommendation
 - Keep this document as the agent policy.
-- Keep [misc/claude-project-instructions.md](misc/claude-project-instructions.md) as the host policy.
+- Keep [misc/claude-project-instructions.md](claude-project-instructions.md) as the host policy.
 - Optionally keep a short “use these tools and be concise” hint in the server’s instructions. This balances runtime control and code simplicity.
 
 
@@ -117,7 +117,7 @@ Recommendation
 
 ## References (clickable)
 
-- Tool registrations start at [JavaScript.server.tool()](mcp-cursor-agent/server.js:273)
-- Executor (spawn, timeouts, idle): [JavaScript.invokeCursorAgent()](mcp-cursor-agent/server.js:38)
-- Legacy single‑shot runner: [JavaScript.runCursorAgent()](mcp-cursor-agent/server.js:153)
-- Main README: [mcp-cursor-agent/README.md](mcp-cursor-agent/README.md)
+- Tool registrations start at [JavaScript.server.tool()](../server.js:361)
+- Executor (spawn, timeouts, idle): [JavaScript.invokeCursorAgent()](../server.js:51)
+- Legacy single‑shot runner: [JavaScript.runCursorAgent()](../server.js:229)
+- Main README: [mcp-cursor-agent/README.md](../README.md)
