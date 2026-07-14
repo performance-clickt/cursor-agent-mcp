@@ -5,6 +5,9 @@
   "private": true,
   "description": "MCP wrapper server for cursor-agent CLI. Multi-tool: chat/edit/analyze/search/plan/raw + legacy run.",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.3",
     "zod": "^3.23.8"
