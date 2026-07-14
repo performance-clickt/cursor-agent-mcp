@@ -9,7 +9,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildArgv, resolveTimeout, normalizeArgs } from '../lib/argv.js';
+import { buildArgv, resolveTimeout, resolveEffectiveTimeout, normalizeArgs } from '../lib/argv.js';
 
 // --- buildArgv: --print / --output-format injection + passthrough ----------
 
@@ -157,9 +157,9 @@ test('buildArgv emits -f before -m, both before the prompt', () => {
 
 // --- resolveTimeout --------------------------------------------------------
 
-test('resolveTimeout returns the default when env value is unset/empty', () => {
-  assert.equal(resolveTimeout(undefined), 30000);
-  assert.equal(resolveTimeout(''), 30000);
+test('resolveTimeout returns the default (120000) when env value is unset/empty', () => {
+  assert.equal(resolveTimeout(undefined), 120000);
+  assert.equal(resolveTimeout(''), 120000);
 });
 
 test('resolveTimeout parses a valid numeric env value', () => {
@@ -167,8 +167,8 @@ test('resolveTimeout parses a valid numeric env value', () => {
   assert.equal(resolveTimeout('60000'), 60000);
 });
 
-test('resolveTimeout falls back to default on NaN', () => {
-  assert.equal(resolveTimeout('abc'), 30000);
+test('resolveTimeout falls back to the default (120000) on NaN', () => {
+  assert.equal(resolveTimeout('abc'), 120000);
 });
 
 test('resolveTimeout honors a custom default', () => {
@@ -179,6 +179,39 @@ test('resolveTimeout honors a custom default', () => {
 test('resolveTimeout preserves an explicit 0 (truthy-guard on env string)', () => {
   // "0" is a non-empty string, so it is parsed rather than defaulted.
   assert.equal(resolveTimeout('0'), 0);
+});
+
+// --- resolveEffectiveTimeout: per-call > env > default ---------------------
+
+test('resolveEffectiveTimeout per-call value wins over env and default', () => {
+  // per-call beats env...
+  assert.equal(resolveEffectiveTimeout(5000, '60000'), 5000);
+  // ...and beats the default when env is unset.
+  assert.equal(resolveEffectiveTimeout(5000, undefined), 5000);
+});
+
+test('resolveEffectiveTimeout env wins over default when no per-call value', () => {
+  assert.equal(resolveEffectiveTimeout(undefined, '60000'), 60000);
+});
+
+test('resolveEffectiveTimeout falls back to default (120000) with no per-call and no/invalid env', () => {
+  assert.equal(resolveEffectiveTimeout(undefined, undefined), 120000);
+  assert.equal(resolveEffectiveTimeout(undefined, ''), 120000);
+  assert.equal(resolveEffectiveTimeout(undefined, 'abc'), 120000);
+});
+
+test('resolveEffectiveTimeout ignores invalid per-call values and falls through', () => {
+  // NaN / non-positive / non-number per-call must not win; env/default takes over.
+  assert.equal(resolveEffectiveTimeout(Number.NaN, '60000'), 60000);
+  assert.equal(resolveEffectiveTimeout(0, '60000'), 60000);
+  assert.equal(resolveEffectiveTimeout(-1, '60000'), 60000);
+  assert.equal(resolveEffectiveTimeout('5000', '60000'), 60000); // string is not a number override
+  assert.equal(resolveEffectiveTimeout(Number.NaN, undefined), 120000);
+});
+
+test('resolveEffectiveTimeout honors a custom default when falling through', () => {
+  assert.equal(resolveEffectiveTimeout(undefined, undefined, 9999), 9999);
+  assert.equal(resolveEffectiveTimeout(undefined, 'nope', 9999), 9999);
 });
 
 // --- normalizeArgs ---------------------------------------------------------
