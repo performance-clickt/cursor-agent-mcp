@@ -7,6 +7,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { spawn } from 'node:child_process';
 import process from 'node:process';
+import { buildArgv, resolveTimeout, normalizeArgs } from './lib/argv.js';
 
 // Tool input schema
 const RUN_SCHEMA = z.object({
@@ -38,25 +39,9 @@ function resolveExecutable(explicit) {
 async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable, model, force, print = true }) {
  const cmd = resolveExecutable(executable);
 
- // Compute model/force from args/env
- const userArgs = [...(argv ?? [])];
- const hasModelFlag = userArgs.some((a) => a === '-m' || a === '--model' || /^(?:-m=|--model=)/.test(String(a)));
- const envModel = process.env.CURSOR_AGENT_MODEL && process.env.CURSOR_AGENT_MODEL.trim();
- const effectiveModel = model?.trim?.() || envModel;
-
- const hasForceFlag = userArgs.some((a) => a === '-f' || a === '--force');
- const envForce = (() => {
-   const v = (process.env.CURSOR_AGENT_FORCE || '').toLowerCase();
-   return v === '1' || v === 'true' || v === 'yes' || v === 'on';
- })();
- const effectiveForce = typeof force === 'boolean' ? force : envForce;
-
- const finalArgv = [
-   ...(print ? ['--print', '--output-format', output_format] : []),
-   ...userArgs,
-   ...(hasForceFlag || !effectiveForce ? [] : ['-f']),
-   ...(hasModelFlag || !effectiveModel ? [] : ['-m', effectiveModel]),
- ];
+ // Compute the final argv (model/force from args/env, --print injection).
+ // HM-558 will change the flag ordering; buildArgv preserves today's behavior.
+ const finalArgv = buildArgv({ argv, output_format, model, force, print });
 
  return new Promise((resolve) => {
    let settled = false;
@@ -116,18 +101,18 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
      resolve({ content: [{ type: 'text', text: msg }], isError: true });
    });
 
-   const defaultTimeout = 30000;
-   const timeoutMs = Number.parseInt(process.env.CURSOR_AGENT_TIMEOUT_MS || String(defaultTimeout), 10);
+   // resolveTimeout always returns a finite number (default 30000 on NaN/unset).
+   const timeoutMs = resolveTimeout(process.env.CURSOR_AGENT_TIMEOUT_MS);
    const mainTimer = setTimeout(() => {
      try { child.kill('SIGKILL'); } catch {}
      if (settled) return;
      settled = true;
      cleanup();
      resolve({
-       content: [{ type: 'text', text: `cursor-agent timed out after ${Number.isFinite(timeoutMs) ? timeoutMs : defaultTimeout}ms` }],
+       content: [{ type: 'text', text: `cursor-agent timed out after ${timeoutMs}ms` }],
        isError: true,
      });
-   }, Number.isFinite(timeoutMs) ? timeoutMs : defaultTimeout);
+   }, timeoutMs);
 
    child.on('close', (code) => {
      if (settled) return;
@@ -151,9 +136,7 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
 // Back-compat: single-shot run by prompt as positional argument.
 // Accepts either a flat args object or an object with an "arguments" field (some hosts).
 async function runCursorAgent(input) {
-  const source = (input && typeof input === 'object' && input.arguments && typeof input.prompt === 'undefined')
-    ? input.arguments
-    : input;
+  const source = normalizeArgs(input);
 
   const {
     prompt,
