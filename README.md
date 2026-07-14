@@ -103,7 +103,7 @@ The client uses the same stdio transport a host would use. See [JavaScript.main(
 All tool calls ultimately invoke the same executor [JavaScript.invokeCursorAgent()](server.js:51), which:
 
 - Resolves the `cursor-agent` executable (explicit path or PATH)
-- Injects `--print` and `--output-format <fmt>` by default
+- Injects `--print`, `--output-format <fmt>`, and `--trust` by default
 - Optionally adds `-m <model>` and `-f` based on env/args
 - Streams stdout/stderr and enforces a total timeout
 - Optionally kills long‑idle processes (disabled by default)
@@ -356,6 +356,7 @@ Key entry points:
 - Child processes are spawned with `shell: false` to avoid shell injection and quoting issues.
 - Inputs are validated with Zod; unknown types are rejected.
 - Avoid logging secrets; DEBUG only prints argv and minimal env context.
+- **`--trust` is injected on every headless (`--print`) run (HM-582):** the real `cursor-agent` CLI blocks on an interactive "Workspace Trust Required" prompt otherwise, which would hang a headless MCP call forever. Passing `--trust` grants `cursor-agent` access to all of its tools — including write and shell — in the working directory for that run, the same as if a human had accepted the trust prompt. The write guardrail is `cursor_agent_edit_file`'s own dry-run default (HM-565): it still asks for a patch/diff only and never writes to disk unless the call passes `apply: true`, regardless of `--trust`.
 
 
 ## Versioning
