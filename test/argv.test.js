@@ -4,7 +4,7 @@
 // cursor-agent binary, no network, no credentials, and no installed npm deps.
 // Run with: node --test test/
 //
-// NOTE: argv ordering emits the -f/-m flags BEFORE the positional prompt (HM-558)
+// NOTE: argv ordering emits the -f / --model flags BEFORE the positional prompt (HM-558)
 // so a trailing prompt cannot cause a parser to drop the model/force override.
 
 import { test } from 'node:test';
@@ -63,28 +63,28 @@ test('buildArgv handles missing argv (undefined) as empty', () => {
 test('buildArgv inserts -m <model> from per-call arg (before the prompt)', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], model: 'gpt-5' }, {}),
-    ['--print', '--output-format', 'text', '-m', 'gpt-5', 'p'],
+    ['--print', '--output-format', 'text', '--model', 'gpt-5', 'p'],
   );
 });
 
 test('buildArgv inserts -m <model> from CURSOR_AGENT_MODEL env', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'] }, { CURSOR_AGENT_MODEL: 'glm-5.2' }),
-    ['--print', '--output-format', 'text', '-m', 'glm-5.2', 'p'],
+    ['--print', '--output-format', 'text', '--model', 'glm-5.2', 'p'],
   );
 });
 
 test('buildArgv per-call model takes precedence over env model', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], model: 'call-model' }, { CURSOR_AGENT_MODEL: 'env-model' }),
-    ['--print', '--output-format', 'text', '-m', 'call-model', 'p'],
+    ['--print', '--output-format', 'text', '--model', 'call-model', 'p'],
   );
 });
 
 test('buildArgv trims the per-call model', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], model: '  spaced  ' }, {}),
-    ['--print', '--output-format', 'text', '-m', 'spaced', 'p'],
+    ['--print', '--output-format', 'text', '--model', 'spaced', 'p'],
   );
 });
 
@@ -161,7 +161,7 @@ test('buildArgv does not duplicate -f when --force already present', () => {
 test('buildArgv emits -f before -m, both before the prompt', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], force: true, model: 'm1' }, {}),
-    ['--print', '--output-format', 'text', '-f', '-m', 'm1', 'p'],
+    ['--print', '--output-format', 'text', '-f', '--model', 'm1', 'p'],
   );
 });
 
