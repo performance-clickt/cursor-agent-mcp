@@ -144,6 +144,7 @@ Example:
 
 - Args: { file: string, instruction: string, apply?: boolean, dry_run?: boolean, prompt?: string, ...COMMON }
 - Behavior: Prompt‑based wrapper. Builds a structured instruction that asks the agent to edit or propose a patch for the file.
+- **Dry-run by default (HM-565):** unless the call passes `apply: true`, the tool asks for a patch/diff only and never writes to disk. Set `apply: true` to allow the edit to be applied. The `CURSOR_AGENT_FORCE` env var alone cannot auto-apply an edit — it only affects `-f` injection once `apply: true` has already been requested. This keeps a cheaper delegate model from writing to disk unsupervised.
 - Code path: [JavaScript.server.tool()](mserver.js:286)
 
 Example:

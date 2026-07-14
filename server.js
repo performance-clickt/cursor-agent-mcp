@@ -302,19 +302,30 @@ server.tool(
 
 server.tool(
   'cursor_agent_edit_file',
-  'Edit a file with an instruction. Prompt-based wrapper; no CLI subcommand required.',
+  'Edit a file with an instruction. Prompt-based wrapper; no CLI subcommand required. ' +
+    'Dry-run by default: proposes a patch/diff without writing to disk. Pass apply: true to ' +
+    'allow the edit to be applied; the CURSOR_AGENT_FORCE env var alone can never auto-apply an edit (HM-565).',
   EDIT_FILE_SCHEMA.shape,
   async (args) => {
     try {
       const { file, instruction, apply, dry_run, prompt, output_format, cwd, executable, model, force, extra_args, timeout_ms } = args;
+      // HM-565: apply is an explicit per-call opt-in. A cheaper delegate model
+      // must not write to disk unsupervised, so only applyRequested === true may
+      // apply the edit / inject -f. When not applying, force is hard-pinned to
+      // false so CURSOR_AGENT_FORCE env cannot auto-apply (it would otherwise
+      // win in buildArgv's `typeof force === 'boolean' ? force : envForce`).
+      const applyRequested = apply === true;
+      const effectiveForce = applyRequested ? (typeof force === 'boolean' ? force : true) : false;
       const composedPrompt =
         `Edit the repository file:\n` +
         `- File: ${String(file)}\n` +
         `- Instruction: ${String(instruction)}\n` +
-        (apply ? `- Apply changes if safe.\n` : `- Propose a patch/diff without applying.\n`) +
+        (applyRequested
+          ? `- Apply changes if safe.\n`
+          : `- Dry-run: propose a patch/diff only; do not write to disk.\n`) +
         (dry_run ? `- Treat as dry-run; do not write to disk.\n` : ``) +
         (prompt ? `- Additional context: ${String(prompt)}\n` : ``);
-      return await runCursorAgent({ prompt: composedPrompt, output_format, extra_args, cwd, executable, model, force, timeout_ms });
+      return await runCursorAgent({ prompt: composedPrompt, output_format, extra_args, cwd, executable, model, force: effectiveForce, timeout_ms });
     } catch (e) {
       return { content: [{ type: 'text', text: `Invalid params: ${e?.message || e}` }], isError: true };
     }
