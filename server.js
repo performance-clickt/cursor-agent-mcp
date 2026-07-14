@@ -7,7 +7,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { spawn } from 'node:child_process';
 import process from 'node:process';
-import { buildArgv, resolveEffectiveTimeout, resolveMaxOutputBytes, normalizeArgs, normalizeChatArgs, isModelAllowed } from './lib/argv.js';
+import { buildArgv, resolveEffectiveTimeout, resolveMaxOutputBytes, normalizeArgs, normalizeChatArgs, isModelAllowed, formatRunMetadata } from './lib/argv.js';
 
 // Grace period (ms) between the SIGTERM sent on timeout and the follow-up
 // SIGKILL. Gives the child a moment to flush partial output before it is
@@ -29,6 +29,9 @@ const RUN_SCHEMA = z.object({
   timeout_ms: z.number().int().positive().optional(),
   // Per-call stdout byte cap. Precedence: this > CURSOR_AGENT_MAX_OUTPUT_BYTES env > default (1000000).
   max_output_bytes: z.number().int().positive().optional(),
+  // Opt-in: append a one-line run-metadata block (model/duration/exit/bytes/truncated)
+  // to the result. Per-call boolean wins; else CURSOR_AGENT_RUN_METADATA env. Off by default.
+  include_run_metadata: z.boolean().optional(),
 });
 
 // Resolve the executable path for cursor-agent
@@ -45,7 +48,7 @@ function resolveExecutable(explicit) {
 * Internal executor that spawns cursor-agent with provided argv and common options.
 * Adds --print and --output-format, handles env/model/force, timeouts and idle kill.
 */
-async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable, model, force, print = true, timeout_ms, max_output_bytes }) {
+async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable, model, force, print = true, timeout_ms, max_output_bytes, include_run_metadata }) {
  const cmd = resolveExecutable(executable);
 
  // HM-567: opt-in model allowlist. Mirrors buildArgv's own model resolution
@@ -60,6 +63,14 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
      isError: true,
    };
  }
+
+ // HM-570: opt-in run metadata. Per-call include_run_metadata wins when it is a
+ // boolean; otherwise the CURSOR_AGENT_RUN_METADATA env is consulted (truthy
+ // 1/true/yes/on, mirroring the CURSOR_AGENT_FORCE parsing in buildArgv). Off by
+ // default — when disabled, each resolved result is byte-for-byte unchanged.
+ const metaEnabled = typeof include_run_metadata === 'boolean'
+   ? include_run_metadata
+   : ['1', 'true', 'yes', 'on'].includes((process.env.CURSOR_AGENT_RUN_METADATA || '').trim().toLowerCase());
 
  // Compute the final argv (model/force from args/env, --print injection).
  // HM-558 will change the flag ordering; buildArgv preserves today's behavior.
@@ -92,6 +103,25 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
        console.error('[cursor-mcp] spawn:', cmd, ...finalArgv);
      } catch {}
    }
+
+   // Wall-clock start for the run-metadata duration (HM-570), captured just
+   // before spawn so it reflects the child's actual lifetime.
+   const startedAt = Date.now();
+
+   // Append a single run-metadata line as an extra text item to a resolved
+   // result when enabled; a no-op passthrough otherwise. Reads `out.length` and
+   // `truncated` at call time so each branch reports its own byte count/state.
+   // When disabled it returns `result` untouched, so the OFF path is unchanged.
+   const withMeta = (result, exitCode) =>
+     metaEnabled
+       ? {
+           ...result,
+           content: [
+             ...result.content,
+             { type: 'text', text: formatRunMetadata({ model: resolvedModel, durationMs: Date.now() - startedAt, exitCode, bytes: out.length, truncated }) },
+           ],
+         }
+       : result;
 
    const child = spawn(cmd, finalArgv, {
      shell: false, // safer across platforms; rely on PATH/PATHEXT
@@ -141,7 +171,7 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
        `Failed to start "${cmd}": ${e?.message || e}\n` +
        `Args: ${JSON.stringify(finalArgv)}\n` +
        (process.env.CURSOR_AGENT_PATH ? `CURSOR_AGENT_PATH=${process.env.CURSOR_AGENT_PATH}\n` : '');
-     resolve({ content: [{ type: 'text', text: msg }], isError: true });
+     resolve(withMeta({ content: [{ type: 'text', text: msg }], isError: true }, null));
    });
 
    // Precedence: per-call timeout_ms > CURSOR_AGENT_TIMEOUT_MS env > default.
@@ -170,25 +200,25 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
        // The main timer fired: report the timeout, appending any partial
        // stdout the child managed to flush during the SIGTERM grace period.
        const text = `cursor-agent timed out after ${timeoutMs}ms` + (out ? `\n${out}` : '');
-       resolve({ content: [{ type: 'text', text }], isError: true });
+       resolve(withMeta({ content: [{ type: 'text', text }], isError: true }, code));
      } else if (killedByIdle) {
        // The idle-kill fired mid-generation: the output is partial, not a
        // completed run. Return any flushed stdout followed by a truncation
        // marker, and flag it as an error so callers don't treat it as success.
        const text = (out ? `${out}\n` : '') + '[truncated: idle timeout]';
-       resolve({ content: [{ type: 'text', text }], isError: true });
+       resolve(withMeta({ content: [{ type: 'text', text }], isError: true }, code));
      } else if (code === 0) {
        // Success: return the (possibly capped) stdout. When the cap was hit,
        // append a marker so the caller knows output was cut, not merely short.
        const text = truncated
          ? `${out}\n[output truncated at ${maxOutputBytes} bytes]`
          : (out || '(no output)');
-       resolve({ content: [{ type: 'text', text }] });
+       resolve(withMeta({ content: [{ type: 'text', text }] }, code));
      } else {
-       resolve({
+       resolve(withMeta({
          content: [{ type: 'text', text: `cursor-agent exited with code ${code}\n${err || out || '(no output)'}` }],
          isError: true,
-       });
+       }, code));
      }
    });
  });
@@ -209,6 +239,7 @@ async function runCursorAgent(input) {
     force,
     timeout_ms,
     max_output_bytes,
+    include_run_metadata,
   } = source || {};
 
   const argv = [...(extra_args ?? []), String(prompt)];
@@ -225,7 +256,7 @@ async function runCursorAgent(input) {
     } catch {}
   }
  
-  const result = await invokeCursorAgent({ argv, output_format, cwd, executable, model, force, timeout_ms, max_output_bytes });
+  const result = await invokeCursorAgent({ argv, output_format, cwd, executable, model, force, timeout_ms, max_output_bytes, include_run_metadata });
  
   // Echo prompt either when env is set or when caller provided echo_prompt: true (if host forwards unknown args it's fine)
   const echoEnabled = process.env.CURSOR_AGENT_ECHO_PROMPT === '1' || source?.echo_prompt === true;
@@ -277,6 +308,9 @@ const COMMON = {
  timeout_ms: z.number().int().positive().optional(),
  // Per-call stdout byte cap. Precedence: this > CURSOR_AGENT_MAX_OUTPUT_BYTES env > default (1000000).
  max_output_bytes: z.number().int().positive().optional(),
+ // Opt-in: append a one-line run-metadata block (model/duration/exit/bytes/truncated)
+ // to the result. Per-call boolean wins; else CURSOR_AGENT_RUN_METADATA env. Off by default.
+ include_run_metadata: z.boolean().optional(),
  // When true, the server will prepend the effective prompt to the tool output (useful for Claude debugging)
  echo_prompt: z.boolean().optional(),
 };
@@ -348,7 +382,7 @@ server.tool(
   EDIT_FILE_SCHEMA.shape,
   async (args) => {
     try {
-      const { file, instruction, apply, dry_run, prompt, output_format, cwd, executable, model, force, extra_args, timeout_ms, max_output_bytes } = args;
+      const { file, instruction, apply, dry_run, prompt, output_format, cwd, executable, model, force, extra_args, timeout_ms, max_output_bytes, include_run_metadata } = args;
       // HM-565: apply is an explicit per-call opt-in. A cheaper delegate model
       // must not write to disk unsupervised, so only applyRequested === true may
       // apply the edit / inject -f. When not applying, force is hard-pinned to
@@ -365,7 +399,7 @@ server.tool(
           : `- Dry-run: propose a patch/diff only; do not write to disk.\n`) +
         (dry_run ? `- Treat as dry-run; do not write to disk.\n` : ``) +
         (prompt ? `- Additional context: ${String(prompt)}\n` : ``);
-      return await runCursorAgent({ prompt: composedPrompt, output_format, extra_args, cwd, executable, model, force: effectiveForce, timeout_ms, max_output_bytes });
+      return await runCursorAgent({ prompt: composedPrompt, output_format, extra_args, cwd, executable, model, force: effectiveForce, timeout_ms, max_output_bytes, include_run_metadata });
     } catch (e) {
       return { content: [{ type: 'text', text: `Invalid params: ${e?.message || e}` }], isError: true };
     }
@@ -378,13 +412,13 @@ server.tool(
   ANALYZE_FILES_SCHEMA.shape,
   async (args) => {
     try {
-      const { paths, prompt, output_format, cwd, executable, model, force, extra_args, timeout_ms, max_output_bytes } = args;
+      const { paths, prompt, output_format, cwd, executable, model, force, extra_args, timeout_ms, max_output_bytes, include_run_metadata } = args;
       const list = Array.isArray(paths) ? paths : [paths];
       const composedPrompt =
         `Analyze the following paths in the repository:\n` +
         list.map((p) => `- ${String(p)}`).join('\n') + '\n' +
         (prompt ? `Additional prompt: ${String(prompt)}\n` : '');
-      return await runCursorAgent({ prompt: composedPrompt, output_format, extra_args, cwd, executable, model, force, timeout_ms, max_output_bytes });
+      return await runCursorAgent({ prompt: composedPrompt, output_format, extra_args, cwd, executable, model, force, timeout_ms, max_output_bytes, include_run_metadata });
     } catch (e) {
       return { content: [{ type: 'text', text: `Invalid params: ${e?.message || e}` }], isError: true };
     }
@@ -397,7 +431,7 @@ server.tool(
   SEARCH_REPO_SCHEMA.shape,
   async (args) => {
     try {
-      const { query, include, exclude, output_format, cwd, executable, model, force, extra_args, timeout_ms, max_output_bytes } = args;
+      const { query, include, exclude, output_format, cwd, executable, model, force, extra_args, timeout_ms, max_output_bytes, include_run_metadata } = args;
       const inc = include == null ? [] : (Array.isArray(include) ? include : [include]);
       const exc = exclude == null ? [] : (Array.isArray(exclude) ? exclude : [exclude]);
       const composedPrompt =
@@ -406,7 +440,7 @@ server.tool(
         (inc.length ? `- Include globs:\n${inc.map((p)=>`  - ${String(p)}`).join('\n')}\n` : '') +
         (exc.length ? `- Exclude globs:\n${exc.map((p)=>`  - ${String(p)}`).join('\n')}\n` : '') +
         `Return concise findings with file paths and line references.`;
-      return await runCursorAgent({ prompt: composedPrompt, output_format, extra_args, cwd, executable, model, force, timeout_ms, max_output_bytes });
+      return await runCursorAgent({ prompt: composedPrompt, output_format, extra_args, cwd, executable, model, force, timeout_ms, max_output_bytes, include_run_metadata });
     } catch (e) {
       return { content: [{ type: 'text', text: `Invalid params: ${e?.message || e}` }], isError: true };
     }
@@ -419,14 +453,14 @@ server.tool(
   PLAN_TASK_SCHEMA.shape,
   async (args) => {
     try {
-      const { goal, constraints, output_format, cwd, executable, model, force, extra_args, timeout_ms, max_output_bytes } = args;
+      const { goal, constraints, output_format, cwd, executable, model, force, extra_args, timeout_ms, max_output_bytes, include_run_metadata } = args;
       const cons = constraints ?? [];
       const composedPrompt =
         `Create a step-by-step plan to accomplish the following goal:\n` +
         `- Goal: ${String(goal)}\n` +
         (cons.length ? `- Constraints:\n${cons.map((c)=>`  - ${String(c)}`).join('\n')}\n` : '') +
         `Provide a numbered list of actions.`;
-      return await runCursorAgent({ prompt: composedPrompt, output_format, extra_args, cwd, executable, model, force, timeout_ms, max_output_bytes });
+      return await runCursorAgent({ prompt: composedPrompt, output_format, extra_args, cwd, executable, model, force, timeout_ms, max_output_bytes, include_run_metadata });
     } catch (e) {
       return { content: [{ type: 'text', text: `Invalid params: ${e?.message || e}` }], isError: true };
     }
@@ -440,9 +474,9 @@ server.tool(
  RAW_SCHEMA.shape,
  async (args) => {
    try {
-     const { argv, output_format, cwd, executable, model, force, timeout_ms, max_output_bytes } = args;
+     const { argv, output_format, cwd, executable, model, force, timeout_ms, max_output_bytes, include_run_metadata } = args;
      // For raw calls we disable implicit --print to allow commands like "--help"
-     return await invokeCursorAgent({ argv, output_format, cwd, executable, model, force, print: false, timeout_ms, max_output_bytes });
+     return await invokeCursorAgent({ argv, output_format, cwd, executable, model, force, print: false, timeout_ms, max_output_bytes, include_run_metadata });
    } catch (e) {
      return { content: [{ type: 'text', text: `Invalid params: ${e?.message || e}` }], isError: true };
    }

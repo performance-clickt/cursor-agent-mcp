@@ -121,6 +121,7 @@ These tools are registered in [JavaScript.server.tool()](server.js:273) and belo
 - executable?: string
 - model?: string
 - force?: boolean
+- include_run_metadata?: boolean  → append a one‑line `[run: model=… duration=…ms exit=… bytes=… truncated=…]` block to the result (makes the resolved model and cost observable); off by default, overrides `CURSOR_AGENT_RUN_METADATA`
 - echo_prompt?: boolean  → prepend “Prompt used: …” to the result
 
 
@@ -304,6 +305,7 @@ Environment variables understood by the server:
 - CURSOR_AGENT_TIMEOUT_MS: hard runtime ceiling (default 30000)
 - CURSOR_AGENT_IDLE_EXIT_MS: idle‑kill threshold in ms; "0" disables idle kill (recommended)
 - CURSOR_AGENT_ECHO_PROMPT: "1" to prepend the effective prompt to the tool’s result
+- CURSOR_AGENT_RUN_METADATA: "1"/"true"/"yes"/"on" to append a one‑line `[run: model=… duration=…ms exit=… bytes=… truncated=…]` block to every tool result, so the resolved model and cost are visible in the result itself (host stderr is often hidden). Off by default; a per‑call `include_run_metadata` boolean overrides it. When off, results are byte‑for‑byte unchanged.
 - DEBUG_CURSOR_MCP: "1" to log spawn/exit diagnostics to stderr
 - CURSOR_AGENT_MODEL_ALLOWLIST: opt-in, comma-separated list of models the server is allowed to run (e.g. `glm-5.2,gpt-5`); entries are trimmed, empty entries are dropped. Unset or empty = allow all models (backward-compatible; we don't yet hardcode a rejecting default since HM-557's full model list is still blocked). When set, a resolved model (per-call `model` or the `CURSOR_AGENT_MODEL` fallback) not in the list is rejected before spawning, with an error naming the offending model. Recommended to include `glm-5.2` if you route to it.
 

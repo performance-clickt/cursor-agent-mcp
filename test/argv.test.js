@@ -18,6 +18,7 @@ import {
   normalizeArgs,
   normalizeChatArgs,
   isModelAllowed,
+  formatRunMetadata,
 } from '../lib/argv.js';
 
 // --- buildArgv: --print / --output-format injection + passthrough ----------
@@ -373,4 +374,53 @@ test('isModelAllowed defaults env to process.env when omitted', () => {
     if (prev === undefined) delete process.env.CURSOR_AGENT_MODEL_ALLOWLIST;
     else process.env.CURSOR_AGENT_MODEL_ALLOWLIST = prev;
   }
+});
+
+// --- formatRunMetadata (HM-570) --------------------------------------------
+// Pure, single-line run-metadata block appended (opt-in) to a tool result so a
+// mis-route or cost is visible in the result itself, not only on host stderr.
+
+test('formatRunMetadata formats a completed run with values', () => {
+  assert.equal(
+    formatRunMetadata({ model: 'glm-5.2', durationMs: 1234, exitCode: 0, bytes: 42, truncated: false }),
+    '[run: model=glm-5.2 duration=1234ms exit=0 bytes=42 truncated=false]',
+  );
+});
+
+test('formatRunMetadata carries a truncated flag and a non-zero exit code', () => {
+  assert.equal(
+    formatRunMetadata({ model: 'gpt-5', durationMs: 60000, exitCode: 1, bytes: 1000000, truncated: true }),
+    '[run: model=gpt-5 duration=60000ms exit=1 bytes=1000000 truncated=true]',
+  );
+});
+
+test('formatRunMetadata renders an empty/whitespace/missing model as "(default)"', () => {
+  assert.equal(
+    formatRunMetadata({ model: '', durationMs: 5, exitCode: 0, bytes: 0, truncated: false }),
+    '[run: model=(default) duration=5ms exit=0 bytes=0 truncated=false]',
+  );
+  assert.equal(
+    formatRunMetadata({ model: '   ', durationMs: 5, exitCode: 0, bytes: 0, truncated: false }),
+    '[run: model=(default) duration=5ms exit=0 bytes=0 truncated=false]',
+  );
+  assert.equal(
+    formatRunMetadata({ model: undefined, durationMs: 5, exitCode: 0, bytes: 0, truncated: false }),
+    '[run: model=(default) duration=5ms exit=0 bytes=0 truncated=false]',
+  );
+});
+
+test('formatRunMetadata renders a null/undefined exitCode as "n/a" (but keeps exit=0)', () => {
+  assert.equal(
+    formatRunMetadata({ model: 'm', durationMs: 10, exitCode: null, bytes: 3, truncated: true }),
+    '[run: model=m duration=10ms exit=n/a bytes=3 truncated=true]',
+  );
+  assert.equal(
+    formatRunMetadata({ model: 'm', durationMs: 10, exitCode: undefined, bytes: 3, truncated: true }),
+    '[run: model=m duration=10ms exit=n/a bytes=3 truncated=true]',
+  );
+  // exit code 0 must NOT collapse to "n/a" (explicit null check, not falsy).
+  assert.equal(
+    formatRunMetadata({ model: 'm', durationMs: 10, exitCode: 0, bytes: 3, truncated: false }),
+    '[run: model=m duration=10ms exit=0 bytes=3 truncated=false]',
+  );
 });
