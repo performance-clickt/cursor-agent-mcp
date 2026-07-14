@@ -26,14 +26,14 @@ import {
 test('buildArgv injects --print and --output-format then user args', () => {
   assert.deepEqual(
     buildArgv({ argv: ['hello'], output_format: 'json' }, {}),
-    ['--print', '--output-format', 'json', 'hello'],
+    ['--print', '--output-format', 'json', '--trust', 'hello'],
   );
 });
 
 test('buildArgv defaults output_format to text', () => {
   assert.deepEqual(
     buildArgv({ argv: ['hello'] }, {}),
-    ['--print', '--output-format', 'text', 'hello'],
+    ['--print', '--output-format', 'text', '--trust', 'hello'],
   );
 });
 
@@ -47,14 +47,14 @@ test('buildArgv with print=false omits --print/--output-format', () => {
 test('buildArgv passes through multiple extra/user args in order', () => {
   assert.deepEqual(
     buildArgv({ argv: ['sub', '--flag', 'prompt'], output_format: 'text' }, {}),
-    ['--print', '--output-format', 'text', 'sub', '--flag', 'prompt'],
+    ['--print', '--output-format', 'text', '--trust', 'sub', '--flag', 'prompt'],
   );
 });
 
 test('buildArgv handles missing argv (undefined) as empty', () => {
   assert.deepEqual(
     buildArgv({}, {}),
-    ['--print', '--output-format', 'text'],
+    ['--print', '--output-format', 'text', '--trust'],
   );
 });
 
@@ -63,49 +63,49 @@ test('buildArgv handles missing argv (undefined) as empty', () => {
 test('buildArgv inserts -m <model> from per-call arg (before the prompt)', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], model: 'gpt-5' }, {}),
-    ['--print', '--output-format', 'text', '--model', 'gpt-5', 'p'],
+    ['--print', '--output-format', 'text', '--trust', '--model', 'gpt-5', 'p'],
   );
 });
 
 test('buildArgv inserts -m <model> from CURSOR_AGENT_MODEL env', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'] }, { CURSOR_AGENT_MODEL: 'glm-5.2' }),
-    ['--print', '--output-format', 'text', '--model', 'glm-5.2', 'p'],
+    ['--print', '--output-format', 'text', '--trust', '--model', 'glm-5.2', 'p'],
   );
 });
 
 test('buildArgv per-call model takes precedence over env model', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], model: 'call-model' }, { CURSOR_AGENT_MODEL: 'env-model' }),
-    ['--print', '--output-format', 'text', '--model', 'call-model', 'p'],
+    ['--print', '--output-format', 'text', '--trust', '--model', 'call-model', 'p'],
   );
 });
 
 test('buildArgv trims the per-call model', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], model: '  spaced  ' }, {}),
-    ['--print', '--output-format', 'text', '--model', 'spaced', 'p'],
+    ['--print', '--output-format', 'text', '--trust', '--model', 'spaced', 'p'],
   );
 });
 
 test('buildArgv does not inject -m when -m already present in user args', () => {
   assert.deepEqual(
     buildArgv({ argv: ['-m', 'preset', 'p'], model: 'ignored' }, { CURSOR_AGENT_MODEL: 'env' }),
-    ['--print', '--output-format', 'text', '-m', 'preset', 'p'],
+    ['--print', '--output-format', 'text', '--trust', '-m', 'preset', 'p'],
   );
 });
 
 test('buildArgv does not inject -m when --model= form already present', () => {
   assert.deepEqual(
     buildArgv({ argv: ['--model=preset', 'p'] }, { CURSOR_AGENT_MODEL: 'env' }),
-    ['--print', '--output-format', 'text', '--model=preset', 'p'],
+    ['--print', '--output-format', 'text', '--trust', '--model=preset', 'p'],
   );
 });
 
 test('buildArgv does not inject -m when no model is effective', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'] }, {}),
-    ['--print', '--output-format', 'text', 'p'],
+    ['--print', '--output-format', 'text', '--trust', 'p'],
   );
 });
 
@@ -114,7 +114,7 @@ test('buildArgv does not inject -m when no model is effective', () => {
 test('buildArgv inserts -f from per-call force=true (before the prompt)', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], force: true }, {}),
-    ['--print', '--output-format', 'text', '-f', 'p'],
+    ['--print', '--output-format', 'text', '--trust', '-f', 'p'],
   );
 });
 
@@ -122,7 +122,7 @@ test('buildArgv inserts -f from CURSOR_AGENT_FORCE env truthy variants', () => {
   for (const v of ['1', 'true', 'yes', 'on', 'TRUE', 'On']) {
     assert.deepEqual(
       buildArgv({ argv: ['p'] }, { CURSOR_AGENT_FORCE: v }),
-      ['--print', '--output-format', 'text', '-f', 'p'],
+      ['--print', '--output-format', 'text', '--trust', '-f', 'p'],
       `expected -f for CURSOR_AGENT_FORCE=${v}`,
     );
   }
@@ -132,7 +132,7 @@ test('buildArgv does not append -f for falsy/other CURSOR_AGENT_FORCE values', (
   for (const v of ['0', 'false', 'no', 'off', '', 'maybe']) {
     assert.deepEqual(
       buildArgv({ argv: ['p'] }, { CURSOR_AGENT_FORCE: v }),
-      ['--print', '--output-format', 'text', 'p'],
+      ['--print', '--output-format', 'text', '--trust', 'p'],
       `expected no -f for CURSOR_AGENT_FORCE=${v}`,
     );
   }
@@ -141,19 +141,19 @@ test('buildArgv does not append -f for falsy/other CURSOR_AGENT_FORCE values', (
 test('buildArgv per-call force=false overrides env force=1', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], force: false }, { CURSOR_AGENT_FORCE: '1' }),
-    ['--print', '--output-format', 'text', 'p'],
+    ['--print', '--output-format', 'text', '--trust', 'p'],
   );
 });
 
 test('buildArgv does not duplicate -f when force flag already present', () => {
   const out = buildArgv({ argv: ['-f', 'p'], force: true }, { CURSOR_AGENT_FORCE: '1' });
-  assert.deepEqual(out, ['--print', '--output-format', 'text', '-f', 'p']);
+  assert.deepEqual(out, ['--print', '--output-format', 'text', '--trust', '-f', 'p']);
   assert.equal(out.filter((a) => a === '-f').length, 1);
 });
 
 test('buildArgv does not duplicate -f when --force already present', () => {
   const out = buildArgv({ argv: ['--force', 'p'], force: true }, {});
-  assert.deepEqual(out, ['--print', '--output-format', 'text', '--force', 'p']);
+  assert.deepEqual(out, ['--print', '--output-format', 'text', '--trust', '--force', 'p']);
 });
 
 // --- buildArgv: force + model ordering together ---------------------------
@@ -161,7 +161,7 @@ test('buildArgv does not duplicate -f when --force already present', () => {
 test('buildArgv emits -f before -m, both before the prompt', () => {
   assert.deepEqual(
     buildArgv({ argv: ['p'], force: true, model: 'm1' }, {}),
-    ['--print', '--output-format', 'text', '-f', '--model', 'm1', 'p'],
+    ['--print', '--output-format', 'text', '--trust', '-f', '--model', 'm1', 'p'],
   );
 });
 
