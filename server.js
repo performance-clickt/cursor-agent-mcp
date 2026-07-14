@@ -138,7 +138,13 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
        // stdout the child managed to flush during the SIGTERM grace period.
        const text = `cursor-agent timed out after ${timeoutMs}ms` + (out ? `\n${out}` : '');
        resolve({ content: [{ type: 'text', text }], isError: true });
-     } else if (code === 0 || (killedByIdle && out)) {
+     } else if (killedByIdle) {
+       // The idle-kill fired mid-generation: the output is partial, not a
+       // completed run. Return any flushed stdout followed by a truncation
+       // marker, and flag it as an error so callers don't treat it as success.
+       const text = (out ? `${out}\n` : '') + '[truncated: idle timeout]';
+       resolve({ content: [{ type: 'text', text }], isError: true });
+     } else if (code === 0) {
        resolve({ content: [{ type: 'text', text: out || '(no output)' }] });
      } else {
        resolve({
