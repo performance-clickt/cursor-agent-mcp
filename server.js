@@ -5,9 +5,9 @@
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import process from 'node:process';
-import { buildArgv, resolveEffectiveTimeout, resolveMaxOutputBytes, normalizeArgs, normalizeChatArgs, isModelAllowed, formatRunMetadata } from './lib/argv.js';
+import { buildArgv, resolveEffectiveTimeout, resolveMaxOutputBytes, normalizeArgs, normalizeChatArgs, isModelAllowed, formatRunMetadata, parseModelList } from './lib/argv.js';
 
 // Grace period (ms) between the SIGTERM sent on timeout and the follow-up
 // SIGKILL. Gives the child a moment to flush partial output before it is
@@ -44,6 +44,23 @@ function resolveExecutable(explicit) {
   return 'cursor-agent';
 }
 
+// HM-557: cached list of models `cursor-agent --list-models` reports, so the
+// reachability preflight spawns the CLI at most once per process. Returns an
+// array of model ids, or null if the list can't be obtained (fail-open, e.g.
+// offline or CLI missing — never block a run just because the probe failed).
+let _reachableModelsCache; // undefined = not fetched yet
+function getReachableModels(cmd) {
+  if (_reachableModelsCache !== undefined) return _reachableModelsCache;
+  try {
+    const res = spawnSync(cmd, ['--list-models'], { encoding: 'utf8', timeout: 15000 });
+    const ids = res.status === 0 && res.stdout ? parseModelList(res.stdout) : [];
+    _reachableModelsCache = ids.length ? ids : null;
+  } catch {
+    _reachableModelsCache = null;
+  }
+  return _reachableModelsCache;
+}
+
 /**
 * Internal executor that spawns cursor-agent with provided argv and common options.
 * Adds --print and --output-format, handles env/model/force, timeouts and idle kill.
@@ -62,6 +79,21 @@ async function invokeCursorAgent({ argv, output_format = 'text', cwd, executable
      content: [{ type: 'text', text: `Model "${resolvedModel}" is not in the allowlist (CURSOR_AGENT_MODEL_ALLOWLIST).` }],
      isError: true,
    };
+ }
+
+ // HM-557: reachability preflight. Validate the resolved model against the live
+ // `cursor-agent --list-models` catalog and fail loudly if it's absent (a typo,
+ // or a bare `glm-5.2` when the real id is `glm-5.2-high`) instead of a wasted or
+ // silently-wrong run. Cached per process; fail-open if the list is unavailable;
+ // skippable via CURSOR_AGENT_SKIP_PREFLIGHT=1.
+ if (resolvedModel && process.env.CURSOR_AGENT_SKIP_PREFLIGHT !== '1') {
+   const reachable = getReachableModels(cmd);
+   if (reachable && !reachable.includes(resolvedModel)) {
+     return {
+       content: [{ type: 'text', text: `Model "${resolvedModel}" is not reachable via cursor-agent (not in --list-models). Run \`${cmd} --list-models\` for valid ids; named models also require a paid Cursor plan.` }],
+       isError: true,
+     };
+   }
  }
 
  // HM-570: opt-in run metadata. Per-call include_run_metadata wins when it is a
